@@ -1,28 +1,109 @@
-/*
- * Tencent is pleased to support the open source community by making 蓝鲸 available.
- * Copyright (C) 2017-2018 THL A29 Limited, a Tencent company. All rights reserved.
- * Licensed under the MIT License (the "License"); you may not use this file except
- * in compliance with the License. You may obtain a copy of the License at
- * http://opensource.org/licenses/MIT
- * Unless required by applicable law or agreed to in writing, software distributed under
- * the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
- * either express or implied. See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-package client
+package types
 
 import (
+	"configcenter/src/common"
+	"configcenter/src/common/errors"
+	"configcenter/src/common/http/httpclient"
+	"encoding/json"
+	"fmt"
+	"github.com/tidwall/gjson"
 	"net/http"
+	"strings"
 )
 
-// Client controller client
-type Client struct {
-	forward       *ForwardParam
-	isTransaction bool
+// Context define
+type Context struct {
+	// Forward the forward params
+	Forward *ForwardParam
+	// Module the module name, it will be used to find the server address
+	Module string
+	// Name named the api, it's useful in tracking calling chain
+	Name string
+	// URL the relative url for the api. e.g. /object/v1/object
+	URL string
+	// Method the http request method
+	Method string
+	// URLParams the url will format by the params
+	URLParams []interface{}
+	// Body will marshal as json and use as request body
+	Body interface{}
+
+	IsTransaction   bool
+	TransactionRoot *Context
+	Called          []*Context
+
+	defErr errors.DefaultCCErrorIf
+	addr   ServerGetter
+}
+
+// ServerGetter define the get server interface
+type ServerGetter interface {
+	GetServer(servType string) (string, error)
+}
+
+// Clone returns the clone ClientContext
+func (ctx *Context) Clone() *Context {
+	clone := *ctx
+	return &clone
 }
 
 // ForwardParam define params should parse via request
 type ForwardParam struct {
 	Header http.Header
+}
+
+// Call execute the call, if mock have the same key, will just return the mockdata
+func (ctx *Context) Call(result interface{}) error {
+	if mockingMode {
+		if err := json.Unmarshal(mockData[ctx.Name], result); err != nil {
+			return ctx.defErr.Error(common.CCErrCommJSONUnmarshalFailed)
+		}
+	}
+
+	url := ctx.URL
+	if strings.Contains(ctx.URL, "%s") {
+		url = fmt.Sprintf(ctx.URL, ctx.URLParams...)
+	}
+
+	serveraddr, err := ctx.addr.GetServer(ctx.Module)
+	if err != nil {
+		return ctx.defErr.Error(common.CCErrCommRelyOnServerAddressFailed)
+	}
+
+	url = serveraddr + url
+
+	body, err := json.Marshal(ctx.Body)
+	if err != nil {
+		return ctx.defErr.Error(common.CCErrCommJSONMarshalFailed)
+	}
+	out, err := httpclient.NewHttpClient().Request(url, ctx.Method, ctx.Forward.Header, body)
+	if err != nil {
+		return ctx.defErr.Error(common.CCErrCommHTTPDoRequestFailed)
+	}
+
+	val := gjson.ParseBytes(out)
+	if val.Get(common.HTTPBKAPIErrorCode).Int() != common.CCSuccess {
+		return ctx.defErr.Error(common.CCErrCommHTTPDoRequestFailed)
+	}
+
+	err = json.Unmarshal([]byte(val.Get("data").String()), result)
+	if err != nil {
+		return ctx.defErr.Error(common.CCErrCommJSONUnmarshalFailed)
+	}
+	return nil
+}
+
+var mockingMode bool
+
+var mockData = map[string][]byte{}
+
+// Mock set the mocking data, only support by ctx.Name now
+func (ctx *Context) Mock(data interface{}) error {
+	mockingMode = true
+	out, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	mockData[ctx.Name] = out
+	return nil
 }

@@ -13,12 +13,15 @@
 package client
 
 import (
+	"configcenter/src/source_controller/client/types"
 	"configcenter/src/source_controller/client/v3"
+	"fmt"
 	"net/http"
 )
 
+// Interface client interface
 type Interface interface {
-	V3() v3.Interface
+	v3.Getter
 }
 
 var _ Interface = &Client{}
@@ -30,15 +33,20 @@ func SetBaseClient(cli *Client) {
 	baseclient = cli
 }
 
+// Client controller client
+type Client struct {
+	ctx *types.Context
+}
+
 // New returns a new clien
 func New() *Client {
 	return baseclient.clone()
 }
 
 // NewWithFoward returns a client that will tramsmit ForwardParam when calling request
-func NewWithFoward(forward *ForwardParam) *Client {
+func NewWithFoward(forward *types.ForwardParam) *Client {
 	clone := baseclient.clone()
-	clone.forward = forward
+	clone.ctx.Forward = forward
 	return clone
 }
 
@@ -48,19 +56,30 @@ func NewWithReq(forward *http.Request) *Client {
 	panic("please use NewWithFoward instead")
 }
 
+// Transaction set this client in transaction
+func (cli *Client) Transaction() *Client {
+	clone := cli.clone()
+	clone.ctx.IsTransaction = true
+	// TODO create transaction logic
+	return clone
+}
+
+// Commit commit the transaction
+func (cli *Client) Commit() error {
+	if !cli.ctx.IsTransaction {
+		return fmt.Errorf("not in transaction")
+	}
+	// TODO commit logic
+	return nil
+}
+
+// V3 returns the v3 client
+func (cli *Client) V3() v3.Interface {
+	return v3.NewClient(cli.ctx)
+}
+
 func (cli *Client) clone() *Client {
 	clone := *cli
+	clone.ctx = clone.ctx.Clone()
 	return &clone
-}
-
-// V3 returns a v3 client
-func (cli *Client) V3() v3.Interface {
-	return cli.ccv3
-}
-
-// NewTransaction set this client in transaction
-func (cli *Client) NewTransaction() *Client {
-	clone := baseclient.clone()
-	clone.isTransaction = true
-	return clone
 }
