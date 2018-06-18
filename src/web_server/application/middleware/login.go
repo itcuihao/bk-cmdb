@@ -110,24 +110,28 @@ func ValidLogin(params ...string) gin.HandlerFunc {
 //isAuthed check user is authed
 func isAuthed(c *gin.Context, isMultiOwner bool, skipLogin, defaultlanguage string) bool {
 	if "1" == skipLogin {
+		blog.Info("skip login")
 		session := sessions.Default(c)
 
 		cookieLanuage, err := c.Cookie(common.BKHTTPCookieLanugageKey)
 		if "" == cookieLanuage || nil != err {
 			c.SetCookie(common.BKHTTPCookieLanugageKey, defaultlanguage, 0, "/", "", false, false)
 			session.Set("language", defaultlanguage)
-
 		} else if cookieLanuage != session.Get("lanugage") {
 			session.Set("language", cookieLanuage)
 		}
 
 		cookieOwnerID, err := c.Cookie(common.BKHTTPOwnerID)
 		if "" == cookieOwnerID || nil != err {
-			c.SetCookie(common.BKHTTPOwnerID, cookieOwnerID, 0, "/", "", false, false)
+			c.SetCookie(common.BKHTTPOwnerID, common.BKDefaultOwnerID, 0, "/", "", false, false)
 			session.Set("owner_uin", cookieOwnerID)
-
 		} else if cookieOwnerID != session.Get("owner_uin") {
 			session.Set("owner_uin", cookieOwnerID)
+			ownerMan := NewOwnerManager("admin", cookieOwnerID, cookieLanuage)
+			if err := ownerMan.InitOwner(); nil != err {
+				blog.Errorf("init owner fail %s", err.Error())
+				return false
+			}
 		}
 
 		session.Set("userName", "admin")
@@ -220,7 +224,16 @@ func loginUser(c *gin.Context, isMultiOwner bool) bool {
 			blog.Error("get owner_uin info role error: %v", err)
 			return false
 		}
-		InitOwner(ownerID)
+		if _, ok := userName.(string); !ok {
+			blog.Error("get username info role error: %v", err)
+		}
+		if _, ok := language.(string); !ok {
+			blog.Error("get language info role error: %v", err)
+		}
+		ownerMan := NewOwnerManager(userName.(string), ownerID, language.(string))
+		if err := ownerMan.InitOwner(); nil != err {
+			return false
+		}
 	}
 
 	cookielanguage, _ := c.Cookie("blueking_language")
