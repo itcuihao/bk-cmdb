@@ -24,6 +24,7 @@ func AddPropertyGroupData(tableName, ownerID string, metaCli dbStorage.DI) error
 	blog.Errorf("add data for  %s table ", tableName)
 	rows := getPropertyGroupData(ownerID)
 	for _, row := range rows {
+		row.OwnerID = ownerID
 		selectorRow :=
 			map[string]interface{}{
 				common.BKObjIDField: row.ObjectID,
