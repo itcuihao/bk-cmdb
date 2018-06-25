@@ -55,7 +55,7 @@ func checkExcelHealer(sheet *xlsx.Sheet, fields map[string]Property, isCheckHead
 
 		field, ok := fields[strName]
 
-		if true == ok {
+		if ok {
 			field.ExcelColIndex = index
 			fields[strName] = field
 		}
@@ -75,7 +75,7 @@ func checkExcelHealer(sheet *xlsx.Sheet, fields map[string]Property, isCheckHead
 func setExcelRowDataByIndex(rowMap map[string]interface{}, sheet *xlsx.Sheet, rowIndex int, fields map[string]Property) {
 	for id, val := range rowMap {
 		property, ok := fields[id]
-		if false == ok {
+		if !ok {
 			continue
 		}
 		cell := sheet.Cell(rowIndex, property.ExcelColIndex)
@@ -84,7 +84,7 @@ func setExcelRowDataByIndex(rowMap map[string]interface{}, sheet *xlsx.Sheet, ro
 		switch property.PropertyType {
 		case common.FieldTypeMultiAsst:
 			arrVal, ok := val.([]interface{})
-			if true == ok {
+			if ok {
 				vals := getAssociatePrimaryKey(arrVal, property.AsstObjPrimaryProperty)
 				cell.SetString(strings.Join(vals, "\n"))
 				style := cell.GetStyle()
@@ -93,7 +93,7 @@ func setExcelRowDataByIndex(rowMap map[string]interface{}, sheet *xlsx.Sheet, ro
 
 		case common.FieldTypeSingleAsst:
 			arrVal, ok := val.([]interface{})
-			if true == ok {
+			if ok {
 				vals := getAssociatePrimaryKey(arrVal, property.AsstObjPrimaryProperty)
 				cell.SetString(strings.Join(vals, "\n"))
 				style := cell.GetStyle()
@@ -104,7 +104,7 @@ func setExcelRowDataByIndex(rowMap map[string]interface{}, sheet *xlsx.Sheet, ro
 			var cellVal string
 			arrVal, ok := property.Option.([]interface{})
 			strEnumID, enumIDOk := val.(string)
-			if true == ok || true == enumIDOk {
+			if ok || enumIDOk {
 				cellVal = getEnumNameByID(strEnumID, arrVal)
 				cell.SetString(cellVal)
 			}
@@ -147,7 +147,7 @@ func getDataFromByExcelRow(row *xlsx.Row, rowIndex int, fields map[string]Proper
 	errMsg := ""
 	for celIDnex, cell := range row.Cells {
 		fieldName, ok := nameIndexMap[celIDnex]
-		if false == ok {
+		if !ok {
 			continue
 		}
 		if "" == strings.Trim(fieldName, "") {
@@ -189,7 +189,7 @@ func getDataFromByExcelRow(row *xlsx.Row, rowIndex int, fields map[string]Proper
 		}
 		field, ok := fields[fieldName]
 
-		if true == ok {
+		if ok {
 			switch field.PropertyType {
 			case common.FieldTypeBool:
 
